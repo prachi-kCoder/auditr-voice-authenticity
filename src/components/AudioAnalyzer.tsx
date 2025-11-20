@@ -32,12 +32,81 @@ const AudioAnalyzer = () => {
         {
           isAuthentic: true,
           confidence: 94.3,
-          details: "Audio exhibits natural human speech patterns with organic breathing sounds, natural pauses, and consistent vocal characteristics. Spectral analysis shows typical frequency distribution of genuine human voice. No artifacts commonly associated with text-to-speech or voice synthesis detected."
+          details: "Audio exhibits natural human speech patterns with organic breathing sounds, natural pauses, and consistent vocal characteristics. Spectral analysis shows typical frequency distribution of genuine human voice. No artifacts commonly associated with text-to-speech or voice synthesis detected.",
+          sourceAttribution: {
+            type: "Human Voice",
+            vendor: "N/A",
+            likelihood: 94.3
+          },
+          acousticEnvironment: {
+            qualityScore: 8.7,
+            backgroundNoise: "Minimal ambient noise detected",
+            artifacts: [],
+            manipulationPoints: []
+          },
+          spectralData: [
+            { frequency: 0, amplitude: 20 },
+            { frequency: 1000, amplitude: 45 },
+            { frequency: 2000, amplitude: 60 },
+            { frequency: 3000, amplitude: 55 },
+            { frequency: 4000, amplitude: 40 },
+            { frequency: 5000, amplitude: 30 },
+            { frequency: 6000, amplitude: 25 },
+            { frequency: 7000, amplitude: 20 },
+            { frequency: 8000, amplitude: 15 }
+          ],
+          temporalData: [
+            { time: 0, energy: 30 },
+            { time: 0.5, energy: 65 },
+            { time: 1, energy: 70 },
+            { time: 1.5, energy: 55 },
+            { time: 2, energy: 60 },
+            { time: 2.5, energy: 45 },
+            { time: 3, energy: 50 }
+          ]
         },
         {
           isAuthentic: false,
           confidence: 87.6,
-          details: "Analysis detected multiple synthetic voice markers including unnatural pitch consistency, absence of micro-variations in tone, and digital artifacts in the high-frequency spectrum. Voice characteristics suggest AI-generated speech with probable text-to-speech origin."
+          details: "Analysis detected multiple synthetic voice markers including unnatural pitch consistency, absence of micro-variations in tone, and digital artifacts in the high-frequency spectrum. Voice characteristics suggest AI-generated speech with probable text-to-speech origin.",
+          sourceAttribution: {
+            type: "Text-to-Speech",
+            vendor: "Google WaveNet (probable)",
+            likelihood: 87.6
+          },
+          acousticEnvironment: {
+            qualityScore: 4.2,
+            backgroundNoise: "Artificially clean signal",
+            artifacts: [
+              "Digital clipping at 2.3s",
+              "Unnatural silence gaps",
+              "Frequency band anomaly (4-6kHz)"
+            ],
+            manipulationPoints: [
+              "Potential splice detected at 1.8s",
+              "Pitch normalization artifact at 2.1s"
+            ]
+          },
+          spectralData: [
+            { frequency: 0, amplitude: 25 },
+            { frequency: 1000, amplitude: 55 },
+            { frequency: 2000, amplitude: 70 },
+            { frequency: 3000, amplitude: 68 },
+            { frequency: 4000, amplitude: 85 },
+            { frequency: 5000, amplitude: 82 },
+            { frequency: 6000, amplitude: 78 },
+            { frequency: 7000, amplitude: 30 },
+            { frequency: 8000, amplitude: 20 }
+          ],
+          temporalData: [
+            { time: 0, energy: 45 },
+            { time: 0.5, energy: 70 },
+            { time: 1, energy: 72 },
+            { time: 1.5, energy: 71 },
+            { time: 2, energy: 70 },
+            { time: 2.5, energy: 68 },
+            { time: 3, energy: 69 }
+          ]
         }
       ];
 
