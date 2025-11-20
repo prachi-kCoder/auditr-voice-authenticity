@@ -1,12 +1,8 @@
-import { CheckCircle2, XCircle, AlertTriangle, Shield, Activity, Radio, Waves, Download } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Shield, Activity, Radio, Waves } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { generateForensicReport } from "@/lib/pdfGenerator";
-import { useToast } from "@/hooks/use-toast";
-import { useRef, useState } from "react";
 
 export interface AnalysisData {
   isAuthentic: boolean;
@@ -33,55 +29,9 @@ interface AnalysisResultProps {
 
 const AnalysisResult = ({ result }: AnalysisResultProps) => {
   const { isAuthentic, confidence, details, sourceAttribution, acousticEnvironment, spectralData, temporalData } = result;
-  const { toast } = useToast();
-  const spectralChartRef = useRef<HTMLDivElement>(null);
-  const temporalChartRef = useRef<HTMLDivElement>(null);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-
-  const handleDownloadReport = async () => {
-    setIsGeneratingPDF(true);
-    toast({
-      title: "Generating report",
-      description: "Please wait while we prepare your forensic report...",
-    });
-
-    try {
-      await generateForensicReport(result, {
-        spectral: spectralChartRef.current,
-        temporal: temporalChartRef.current,
-      });
-
-      toast({
-        title: "Report generated",
-        description: "Your forensic report has been downloaded successfully.",
-      });
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate the forensic report. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGeneratingPDF(false);
-    }
-  };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-      {/* Download Report Button */}
-      <div className="flex justify-end">
-        <Button
-          onClick={handleDownloadReport}
-          disabled={isGeneratingPDF}
-          className="gap-2"
-          variant="default"
-        >
-          <Download className="w-4 h-4" />
-          {isGeneratingPDF ? "Generating..." : "Download Forensic Report"}
-        </Button>
-      </div>
-
       {/* Main Status Card */}
       <Card className={`
         p-6 md:p-8 border-2 transition-all duration-500
@@ -186,7 +136,7 @@ const AnalysisResult = ({ result }: AnalysisResultProps) => {
           </TabsList>
           
           <TabsContent value="spectral" className="space-y-4">
-            <div ref={spectralChartRef} className="h-64 md:h-80 w-full">
+            <div className="h-64 md:h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={spectralData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -224,7 +174,7 @@ const AnalysisResult = ({ result }: AnalysisResultProps) => {
           </TabsContent>
           
           <TabsContent value="temporal" className="space-y-4">
-            <div ref={temporalChartRef} className="h-64 md:h-80 w-full">
+            <div className="h-64 md:h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={temporalData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
