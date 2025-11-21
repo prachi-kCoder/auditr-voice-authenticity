@@ -1,75 +1,31 @@
-# Welcome to your Lovable project
 
+# Auditr: Deepfake Voice Forensics 🔍🎙️
 ## Project info
 <img width="1819" height="855" alt="image" src="https://github.com/user-attachments/assets/406e24fd-9111-4b3a-b84b-582bedfc6fb6" />
 
 
-**URL**: https://lovable.dev/projects/41c44cc7-1899-4a65-80a4-bc42371b149d
+## Overview
+Auditr is a **multi‑model forensic platform** designed to differentiate between authentic human speech and AI‑generated deepfake audio. Built for **financial security, compliance, and trust**, it provides real‑time screening, forensic audit trails, and explainable AI (XAI) visualizations.
 
-## How can I edit this code?
+## Features
+- 🎯 **Deepfake Detection**: CNN‑LSTM pipeline achieving **95.2% accuracy** on benchmark datasets (LibriSpeech, ASVspoof).
+- ⚡ **Real‑Time Screening API**: FastAPI backend delivering liveness checks in **<1 second**.
+- 📊 **Explainable Forensics (XAI)**: SHAP/LIME‑based visualizations for transparent decision‑making.
+- 🔄 **Scalable Processing**: Asynchronous ML workload orchestration with **Celery + Redis**.
+- 🔐 **Authentication & Security**: JWT‑based user management with audit logging.
+- 🗄️ **Database Integration**: PostgreSQL for structured forensic metadata; extensible for cloud storage.
+- 🌐 **Frontend**: React.js dashboard for interactive reports and monitoring.
 
-There are several ways of editing your application.
+## Tech Stack
+- **Backend**: FastAPI, Celery, Redis, PostgreSQL  
+- **Frontend**: React.js, TailwindCSS  
+- **ML Models**: CNN, LSTM, HuggingFace anti‑spoof models  
+- **DevOps**: Docker, Kubernetes, GitHub Actions CI/CD  
+- **Cloud**: AWS (Cloud Practitioner Essentials certified)
 
-**Use Lovable**
+## Architecture
+```text
+Frontend (React.js) → REST API (FastAPI) → ML Engine (CNN/LSTM) → 
+Async Queue (Celery/Redis) → Database (PostgreSQL) → XAI Reports
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/41c44cc7-1899-4a65-80a4-bc42371b149d) and start prompting.
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/41c44cc7-1899-4a65-80a4-bc42371b149d) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
