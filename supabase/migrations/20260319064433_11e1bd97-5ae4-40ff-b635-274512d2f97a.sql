@@ -1,0 +1,1 @@
+SELECT current_setting('app.settings.site_url', true);

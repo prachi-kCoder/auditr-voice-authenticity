@@ -1,0 +1,1 @@
+SELECT 1; -- Acknowledging leaked password protection warning - this is an auth config setting managed at the platform level, not via SQL migration
