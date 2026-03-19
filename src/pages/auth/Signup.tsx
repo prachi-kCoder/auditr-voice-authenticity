@@ -35,11 +35,10 @@ const Signup = () => {
       const validated = signupSchema.parse({ fullName, email, password, confirmPassword });
       setLoading(true);
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: validated.email,
         password: validated.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
           data: {
             full_name: validated.fullName,
           }
@@ -49,14 +48,22 @@ const Signup = () => {
       if (error) {
         if (error.message.includes("already registered")) {
           toast.error("This email is already registered. Please sign in instead.");
+        } else if (error.message.includes("fetch")) {
+          toast.error("Connection error. Please try again.");
         } else {
           toast.error(error.message);
         }
         return;
       }
 
-      toast.success("Account created! Please check your email to verify your account.");
-      navigate("/auth/login");
+      // If auto-confirm is on, user is immediately signed in
+      if (data?.session) {
+        toast.success("Account created successfully!");
+        navigate("/dashboard");
+      } else {
+        toast.success("Account created! Please check your email to verify your account.");
+        navigate("/auth/login");
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
