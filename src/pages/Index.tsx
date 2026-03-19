@@ -3,11 +3,26 @@ import Hero from "@/components/Hero";
 import Features from "@/components/Features";
 import HowItWorks from "@/components/HowItWorks";
 import Security from "@/components/Security";
+import Pricing from "@/components/Pricing";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 
 const Index = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const state = location.state as { scrollTo?: string } | null;
+    if (state?.scrollTo) {
+      setTimeout(() => {
+        const el = document.getElementById(state.scrollTo!);
+        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+      // Clear the state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -16,6 +31,7 @@ const Index = () => {
       <Features />
       <HowItWorks />
       <Security />
+      <Pricing />
       
       {/* Final CTA */}
       <section className="py-20 bg-gradient-primary">
@@ -60,17 +76,16 @@ const Index = () => {
             <div>
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#features" className="hover:text-primary">Features</a></li>
-                <li><a href="#how-it-works" className="hover:text-primary">How It Works</a></li>
-                <li><a href="#security" className="hover:text-primary">Security</a></li>
+                <li><button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-primary bg-transparent border-none cursor-pointer">Features</button></li>
+                <li><button onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-primary bg-transparent border-none cursor-pointer">How It Works</button></li>
+                <li><button onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-primary bg-transparent border-none cursor-pointer">Pricing</button></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Company</h4>
+              <h4 className="font-semibold mb-4">Developers</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-primary">About</a></li>
-                <li><a href="#" className="hover:text-primary">Contact</a></li>
-                <li><a href="#" className="hover:text-primary">Careers</a></li>
+                <li><button onClick={() => navigate("/api-docs")} className="hover:text-primary bg-transparent border-none cursor-pointer">API Reference</button></li>
+                <li><button onClick={() => document.getElementById("security")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-primary bg-transparent border-none cursor-pointer">Security</button></li>
               </ul>
             </div>
             <div>
@@ -78,7 +93,6 @@ const Index = () => {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><a href="#" className="hover:text-primary">Privacy</a></li>
                 <li><a href="#" className="hover:text-primary">Terms</a></li>
-                <li><a href="#" className="hover:text-primary">Security</a></li>
               </ul>
             </div>
           </div>
