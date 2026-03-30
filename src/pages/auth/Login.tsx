@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Lock, Mail } from "lucide-react";
+import { Shield, Lock, Mail, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -19,7 +19,7 @@ const signInWithRetry = async (email: string, password: string, retries = 2): Pr
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       return { data, error };
     } catch (err: any) {
-      if (attempt < retries && (err?.message?.includes("fetch") || err?.message?.includes("network") || err?.name === "TypeError")) {
+      if (attempt < retries && (err?.message?.includes("fetch") || err?.name === "TypeError")) {
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         continue;
       }
@@ -32,17 +32,15 @@ const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
       const validated = loginSchema.parse({ email, password });
       setLoading(true);
-
       const { error } = await signInWithRetry(validated.email, validated.password);
-
       if (error) {
         if (error.message?.includes("Invalid login credentials")) {
           toast.error("Invalid email or password");
@@ -55,14 +53,13 @@ const Login = () => {
         }
         return;
       }
-
       toast.success("Successfully logged in!");
       navigate("/dashboard");
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else if (error?.message?.includes("fetch") || error?.name === "TypeError") {
-        toast.error("Network error. Please check your internet connection and try again.");
+        toast.error("Network error. Please check your connection and try again.");
       } else {
         toast.error("An unexpected error occurred. Please try again.");
       }
@@ -111,10 +108,18 @@ const Login = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link to="/auth/forgot-password" className="text-xs text-primary hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10" required />
+                <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
