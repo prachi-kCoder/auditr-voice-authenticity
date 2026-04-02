@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Lock, Eye, EyeOff } from "lucide-react";
+import { Shield, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -15,16 +15,104 @@ const ResetPassword = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && hash.includes("type=recovery")) {
-      setReady(true);
-    } else {
-      supabase.auth.onAuthStateChange((event) => {
-        if (event === "PASSWORD_RECOVERY") setReady(true);
-      });
-    }
+    // Listen for auth state changes - Supabase will fire PASSWORD_RECOVERY
+    // when the recovery token from the URL is successfully exchanged
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth event on reset page:", event);
+      if (event === "PASSWORD_RECOVERY") {
+        setReady(true);
+        setChecking(false);
+      } else if (event === "SIGNED_IN" && session) {
+        // Sometimes recovery comes as SIGNED_IN with a recovery session
+        setReady(true);
+        setChecking(false);
+      }
+    });
+
+    // Also try to extract tokens from URL hash/params and exchange them
+    const processTokens = async () => {
+      const hash = window.location.hash;
+      const params = new URLSearchParams(window.location.search);
+
+      // Handle hash-based tokens: #access_token=...&type=recovery
+      if (hash && hash.includes("type=recovery")) {
+        // Supabase client auto-processes hash tokens via onAuthStateChange
+        // Give it a moment to process
+        setTimeout(() => {
+          setChecking(false);
+          // If onAuthStateChange hasn't fired yet, check session
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) setReady(true);
+          });
+        }, 2000);
+        return;
+      }
+
+      // Handle query-param based tokens (PKCE flow)
+      const code = params.get("code");
+      const tokenHash = params.get("token_hash");
+      const type = params.get("type");
+
+      if (code) {
+        try {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            console.error("Code exchange error:", error);
+            setError("Invalid or expired reset link. Please request a new one.");
+          } else {
+            setReady(true);
+          }
+        } catch (err) {
+          console.error("Code exchange failed:", err);
+          setError("Failed to verify reset link. Please try again.");
+        }
+        setChecking(false);
+        return;
+      }
+
+      if (tokenHash && type === "recovery") {
+        try {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+          if (error) {
+            console.error("OTP verify error:", error);
+            setError("Invalid or expired reset link. Please request a new one.");
+          } else {
+            setReady(true);
+          }
+        } catch (err) {
+          console.error("OTP verify failed:", err);
+          setError("Failed to verify reset link. Please try again.");
+        }
+        setChecking(false);
+        return;
+      }
+
+      // No tokens found - wait a bit for onAuthStateChange to fire
+      setTimeout(() => {
+        if (!ready) {
+          // Last resort: check if there's already a session from the recovery
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+              setReady(true);
+            } else {
+              setError("No valid reset link detected. Please request a new password reset.");
+            }
+            setChecking(false);
+          });
+        }
+      }, 3000);
+    };
+
+    processTokens();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleReset = async (e: React.FormEvent) => {
@@ -53,10 +141,43 @@ const ResetPassword = () => {
     }
   };
 
-  if (!ready) {
+  if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Verifying reset link...</p>
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Verifying your reset link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <div className="text-center space-y-4 max-w-md">
+          <Shield className="w-16 h-16 mx-auto text-destructive" />
+          <h2 className="text-2xl font-bold">Reset Link Invalid</h2>
+          <p className="text-muted-foreground">{error}</p>
+          <Button onClick={() => navigate("/auth/forgot-password")} className="mt-4">
+            Request New Reset Link
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <div className="text-center space-y-4 max-w-md">
+          <Shield className="w-16 h-16 mx-auto text-muted-foreground" />
+          <h2 className="text-2xl font-bold">Something Went Wrong</h2>
+          <p className="text-muted-foreground">We couldn't verify your reset link.</p>
+          <Button onClick={() => navigate("/auth/forgot-password")} className="mt-4">
+            Request New Reset Link
+          </Button>
+        </div>
       </div>
     );
   }
