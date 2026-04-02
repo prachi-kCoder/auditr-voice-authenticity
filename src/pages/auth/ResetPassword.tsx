@@ -7,6 +7,38 @@ import { Shield, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+type RecoveryParams = {
+  type: string | null;
+  code: string | null;
+  tokenHash: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  errorDescription: string | null;
+};
+
+const extractRecoveryParams = (input: string): RecoveryParams | null => {
+  try {
+    const url = input.startsWith("http://") || input.startsWith("https://")
+      ? new URL(input)
+      : new URL(input, window.location.origin);
+
+    const searchParams = new URLSearchParams(url.search);
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+    const getParam = (name: string) => searchParams.get(name) ?? hashParams.get(name);
+
+    return {
+      type: getParam("type"),
+      code: getParam("code"),
+      tokenHash: getParam("token_hash") ?? getParam("token"),
+      accessToken: getParam("access_token"),
+      refreshToken: getParam("refresh_token"),
+      errorDescription: getParam("error_description"),
+    };
+  } catch {
+    return null;
+  }
+};
+
 const ResetPassword = () => {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
@@ -14,6 +46,8 @@ const ResetPassword = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [manualLink, setManualLink] = useState("");
+  const [manualProcessing, setManualProcessing] = useState(false);
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
@@ -46,12 +80,6 @@ const ResetPassword = () => {
       setChecking(false);
     };
 
-    const getParam = (name: string) => {
-      const searchParams = new URLSearchParams(window.location.search);
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      return searchParams.get(name) ?? hashParams.get(name);
-    };
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted || resolvedRef.current) return;
 
@@ -61,10 +89,11 @@ const ResetPassword = () => {
       }
 
       if (event === "SIGNED_IN" && session) {
-        const type = getParam("type");
-        const accessToken = getParam("access_token");
-        const code = getParam("code");
-        const tokenHash = getParam("token_hash");
+        const params = extractRecoveryParams(window.location.href);
+        const type = params?.type;
+        const accessToken = params?.accessToken;
+        const code = params?.code;
+        const tokenHash = params?.tokenHash;
 
         if (type === "recovery" || accessToken || code || tokenHash) {
           resolveReady();
@@ -73,12 +102,13 @@ const ResetPassword = () => {
     });
 
     const resolveRecoverySession = async () => {
-      const type = getParam("type");
-      const code = getParam("code");
-      const tokenHash = getParam("token_hash");
-      const accessToken = getParam("access_token");
-      const refreshToken = getParam("refresh_token");
-      const errorDescription = getParam("error_description");
+      const params = extractRecoveryParams(window.location.href);
+      const type = params?.type ?? null;
+      const code = params?.code ?? null;
+      const tokenHash = params?.tokenHash ?? null;
+      const accessToken = params?.accessToken ?? null;
+      const refreshToken = params?.refreshToken ?? null;
+      const errorDescription = params?.errorDescription ?? null;
       const hasRecoverySignal = type === "recovery" || Boolean(code || tokenHash || accessToken || refreshToken);
 
       if (errorDescription) {
@@ -153,6 +183,61 @@ const ResetPassword = () => {
     };
   }, []);
 
+  const handleManualLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const params = extractRecoveryParams(manualLink.trim());
+    const hasRecoverySignal = Boolean(
+      params?.code ||
+      params?.tokenHash ||
+      (params?.accessToken && params?.refreshToken)
+    );
+
+    if (!params || !hasRecoverySignal) {
+      toast.error("Paste the full reset link from the newest email.");
+      return;
+    }
+
+    setManualProcessing(true);
+    setChecking(true);
+
+    try {
+      if (params.accessToken && params.refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: params.accessToken,
+          refresh_token: params.refreshToken,
+        });
+
+        if (error) throw error;
+      } else if (params.code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+        if (error) throw error;
+      } else if (params.tokenHash) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: params.tokenHash,
+          type: "recovery",
+        });
+
+        if (error) throw error;
+      }
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setError("");
+      setReady(true);
+    } catch (error: any) {
+      const message = error?.message?.includes("expired") || error?.message?.includes("invalid")
+        ? "That reset link is no longer valid. Please request a new one and paste the newest link."
+        : "We couldn't validate that reset link. Please request a new one and paste the newest link.";
+
+      setReady(false);
+      setError(message);
+      toast.error(message);
+    } finally {
+      setChecking(false);
+      setManualProcessing(false);
+    }
+  };
+
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -199,11 +284,30 @@ const ResetPassword = () => {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-8">
-        <div className="text-center space-y-4 max-w-md">
+        <div className="text-center space-y-4 max-w-md w-full">
           <Shield className="w-16 h-16 mx-auto text-destructive" />
           <h2 className="text-2xl font-bold">Reset Link Invalid</h2>
           <p className="text-muted-foreground">{error}</p>
-          <Button onClick={() => navigate("/auth/forgot-password")} className="mt-4">
+          <form onSubmit={handleManualLink} className="space-y-3 text-left">
+            <div className="space-y-2">
+              <Label htmlFor="manualResetLink">Paste the newest reset link</Label>
+              <Input
+                id="manualResetLink"
+                type="url"
+                placeholder="https://..."
+                value={manualLink}
+                onChange={(e) => setManualLink(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={manualProcessing}>
+              {manualProcessing ? "Validating..." : "Use Pasted Link"}
+            </Button>
+          </form>
+          <p className="text-sm text-muted-foreground">
+            If your mail app opens an invalid page, request a fresh email and paste the full link here instead of tapping it.
+          </p>
+          <Button variant="outline" onClick={() => navigate("/auth/forgot-password")} className="mt-2">
             Request New Reset Link
           </Button>
         </div>
