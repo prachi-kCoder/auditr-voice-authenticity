@@ -21,10 +21,14 @@ const ForgotPassword = () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) {
-        toast.error(error.message);
+        if (error.status === 429) {
+          toast.error("Please wait a moment before requesting another reset email.");
+        } else {
+          toast.error(error.message);
+        }
       } else {
         setSent(true);
         toast.success("Password reset link sent! Check your inbox.");
@@ -60,6 +64,9 @@ const ForgotPassword = () => {
               <h2 className="text-3xl font-bold">Check Your Email</h2>
               <p className="text-muted-foreground">
                 We've sent a password reset link to <strong>{email}</strong>. Click the link in the email to set a new password.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Use the newest email only. If your mail app opens an invalid link, request a fresh email and paste the full link into the reset page.
               </p>
               <Button variant="outline" className="mt-4" onClick={() => setSent(false)}>
                 Try a different email
