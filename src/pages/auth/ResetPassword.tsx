@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,123 +17,167 @@ const ResetPassword = () => {
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
+  const resolvedRef = useRef(false);
 
   useEffect(() => {
-    // Listen for auth state changes - Supabase will fire PASSWORD_RECOVERY
-    // when the recovery token from the URL is successfully exchanged
+    let mounted = true;
+    let fallbackTimer: number | undefined;
+
+    const clearRecoveryUrl = () => {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    };
+
+    const resolveReady = () => {
+      if (!mounted || resolvedRef.current) return;
+      resolvedRef.current = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      clearRecoveryUrl();
+      setError("");
+      setReady(true);
+      setChecking(false);
+    };
+
+    const resolveError = (message: string) => {
+      if (!mounted || resolvedRef.current) return;
+      resolvedRef.current = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      setReady(false);
+      setError(message);
+      setChecking(false);
+    };
+
+    const getParam = (name: string) => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      return searchParams.get(name) ?? hashParams.get(name);
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth event on reset page:", event);
+      if (!mounted || resolvedRef.current) return;
+
       if (event === "PASSWORD_RECOVERY") {
-        setReady(true);
-        setChecking(false);
-      } else if (event === "SIGNED_IN" && session) {
-        // Sometimes recovery comes as SIGNED_IN with a recovery session
-        setReady(true);
-        setChecking(false);
+        resolveReady();
+        return;
+      }
+
+      if (event === "SIGNED_IN" && session) {
+        const type = getParam("type");
+        const accessToken = getParam("access_token");
+        const code = getParam("code");
+        const tokenHash = getParam("token_hash");
+
+        if (type === "recovery" || accessToken || code || tokenHash) {
+          resolveReady();
+        }
       }
     });
 
-    // Also try to extract tokens from URL hash/params and exchange them
-    const processTokens = async () => {
-      const hash = window.location.hash;
-      const params = new URLSearchParams(window.location.search);
+    const resolveRecoverySession = async () => {
+      const type = getParam("type");
+      const code = getParam("code");
+      const tokenHash = getParam("token_hash");
+      const accessToken = getParam("access_token");
+      const refreshToken = getParam("refresh_token");
+      const errorDescription = getParam("error_description");
+      const hasRecoverySignal = type === "recovery" || Boolean(code || tokenHash || accessToken || refreshToken);
 
-      // Handle hash-based tokens: #access_token=...&type=recovery
-      if (hash && hash.includes("type=recovery")) {
-        // Supabase client auto-processes hash tokens via onAuthStateChange
-        // Give it a moment to process
-        setTimeout(() => {
-          setChecking(false);
-          // If onAuthStateChange hasn't fired yet, check session
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) setReady(true);
+      if (errorDescription) {
+        resolveError(errorDescription);
+        return;
+      }
+
+      try {
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
           });
-        }, 2000);
-        return;
-      }
 
-      // Handle query-param based tokens (PKCE flow)
-      const code = params.get("code");
-      const tokenHash = params.get("token_hash");
-      const type = params.get("type");
-
-      if (code) {
-        try {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error("Code exchange error:", error);
-            setError("Invalid or expired reset link. Please request a new one.");
-          } else {
-            setReady(true);
-          }
-        } catch (err) {
-          console.error("Code exchange failed:", err);
-          setError("Failed to verify reset link. Please try again.");
+          if (error) throw error;
+          resolveReady();
+          return;
         }
-        setChecking(false);
-        return;
-      }
 
-      if (tokenHash && type === "recovery") {
-        try {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          resolveReady();
+          return;
+        }
+
+        if (type === "recovery" && tokenHash) {
           const { error } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
             type: "recovery",
           });
-          if (error) {
-            console.error("OTP verify error:", error);
-            setError("Invalid or expired reset link. Please request a new one.");
-          } else {
-            setReady(true);
-          }
-        } catch (err) {
-          console.error("OTP verify failed:", err);
-          setError("Failed to verify reset link. Please try again.");
-        }
-        setChecking(false);
-        return;
-      }
 
-      // No tokens found - wait a bit for onAuthStateChange to fire
-      setTimeout(() => {
-        if (!ready) {
-          // Last resort: check if there's already a session from the recovery
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-              setReady(true);
-            } else {
-              setError("No valid reset link detected. Please request a new password reset.");
-            }
-            setChecking(false);
-          });
+          if (error) throw error;
+          resolveReady();
+          return;
         }
-      }, 3000);
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          resolveReady();
+          return;
+        }
+
+        fallbackTimer = window.setTimeout(async () => {
+          if (!mounted || resolvedRef.current) return;
+
+          const { data: { session: delayedSession } } = await supabase.auth.getSession();
+          if (!mounted || resolvedRef.current) return;
+
+          if (delayedSession) {
+            resolveReady();
+            return;
+          }
+
+          resolveError(
+            hasRecoverySignal
+              ? "This reset link is invalid or expired. Please request a new one."
+              : "No valid reset link detected. Please request a new password reset."
+          );
+        }, 1500);
+      } catch {
+        resolveError("This reset link is invalid or expired. Please request a new one.");
+      }
     };
 
-    processTokens();
+    void resolveRecoverySession();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (password.length < 8) {
       toast.error("Password must be at least 8 characters");
       return;
     }
+
     if (password !== confirmPassword) {
       toast.error("Passwords don't match");
       return;
     }
+
     setLoading(true);
+
     try {
       const { error } = await supabase.auth.updateUser({ password });
+
       if (error) {
         toast.error(error.message);
-      } else {
-        toast.success("Password updated successfully!");
-        navigate("/dashboard");
+        return;
       }
+
+      toast.success("Password updated successfully!");
+      navigate("/dashboard");
     } catch {
       toast.error("An error occurred. Please try again.");
     } finally {
@@ -204,7 +248,16 @@ const ResetPassword = () => {
               <Label htmlFor="password">New Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" required />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  autoComplete="new-password"
+                  required
+                />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -214,7 +267,16 @@ const ResetPassword = () => {
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="pl-10 pr-10" required />
+                <Input
+                  id="confirmPassword"
+                  type={showConfirm ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  autoComplete="new-password"
+                  required
+                />
                 <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
