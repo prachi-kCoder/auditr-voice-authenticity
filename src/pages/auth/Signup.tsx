@@ -3,10 +3,11 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Lock, Mail, User, Eye, EyeOff } from "lucide-react";
+import { Shield, Lock, Mail, User, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
+import { authErrorMessage, isTransientAuthError, runAuthRequest } from "@/lib/auth-resilience";
 
 const signupSchema = z.object({
   fullName: z.string().trim().min(2, { message: "Name must be at least 2 characters" }),
@@ -20,23 +21,18 @@ const signupSchema = z.object({
   path: ["confirmPassword"],
 });
 
-const signupWithRetry = async (email: string, password: string, fullName: string, retries = 2): Promise<any> => {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { full_name: fullName } },
-      });
-      return { data, error };
-    } catch (err: any) {
-      if (attempt < retries && (err?.message?.includes("fetch") || err?.name === "TypeError")) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      throw err;
-    }
-  }
-};
+const signupWithRetry = (email: string, password: string, fullName: string, onRetry: () => void) =>
+  runAuthRequest(
+    () => supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+        emailRedirectTo: `${window.location.origin}/dashboard`,
+      },
+    }),
+    { onRetry }
+  );
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -47,18 +43,24 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [retryNotice, setRetryNotice] = useState("");
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRetryNotice("");
     try {
       const validated = signupSchema.parse({ fullName, email, password, confirmPassword });
       setLoading(true);
-      const { data, error } = await signupWithRetry(validated.email, validated.password, validated.fullName);
+      const { data, error } = await signupWithRetry(validated.email, validated.password, validated.fullName, () => {
+        setRetryNotice("Connection is slow. Retrying securely...");
+      });
       if (error) {
         if (error.message?.includes("already registered")) {
           toast.error("This email is already registered. Please sign in instead.");
         } else if (error.status === 429) {
           toast.error("Too many attempts. Please wait and try again.");
+        } else if (isTransientAuthError(error)) {
+          toast.error(authErrorMessage(error));
         } else {
           toast.error(error.message || "Signup failed. Please try again.");
         }
@@ -74,13 +76,12 @@ const Signup = () => {
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
-      } else if (error?.message?.includes("fetch") || error?.name === "TypeError") {
-        toast.error("Network error. Please check your connection and try again.");
       } else {
-        toast.error("An unexpected error occurred. Please try again.");
+        toast.error(authErrorMessage(error, "An unexpected error occurred. Please try again."));
       }
     } finally {
       setLoading(false);
+      setRetryNotice("");
     }
   };
 
@@ -118,15 +119,15 @@ const Signup = () => {
               <Label htmlFor="email">Email Address</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="email" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" required />
+                <Input id="email" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" autoComplete="email" required />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" required />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" autoComplete="new-password" required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? "Hide password" : "Show password"}>
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
@@ -136,12 +137,18 @@ const Signup = () => {
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="pl-10 pr-10" required />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <Input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="pl-10 pr-10" autoComplete="new-password" required />
+                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}>
                   {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
+            {retryNotice && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>{retryNotice}</span>
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating account..." : "Create Account"}
             </Button>

@@ -3,30 +3,22 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Lock, Mail, Eye, EyeOff } from "lucide-react";
+import { Shield, Lock, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
+import { authErrorMessage, isTransientAuthError, runAuthRequest } from "@/lib/auth-resilience";
 
 const loginSchema = z.object({
   email: z.string().trim().email({ message: "Invalid email address" }),
   password: z.string().min(6, { message: "Password must be at least 6 characters" })
 });
 
-const signInWithRetry = async (email: string, password: string, retries = 2): Promise<any> => {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      return { data, error };
-    } catch (err: any) {
-      if (attempt < retries && (err?.message?.includes("fetch") || err?.name === "TypeError")) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      throw err;
-    }
-  }
-};
+const signInWithRetry = (email: string, password: string, onRetry: () => void) =>
+  runAuthRequest(
+    () => supabase.auth.signInWithPassword({ email, password }),
+    { onRetry }
+  );
 
 const Login = () => {
   const navigate = useNavigate();
@@ -34,13 +26,19 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [retryNotice, setRetryNotice] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRetryNotice("");
+
     try {
       const validated = loginSchema.parse({ email, password });
       setLoading(true);
-      const { error } = await signInWithRetry(validated.email, validated.password);
+      const { error } = await signInWithRetry(validated.email, validated.password, () => {
+        setRetryNotice("Connection is slow. Retrying securely...");
+      });
+
       if (error) {
         if (error.message?.includes("Invalid login credentials")) {
           toast.error("Invalid email or password");
@@ -48,23 +46,25 @@ const Login = () => {
           toast.error("Please verify your email before signing in.");
         } else if (error.status === 429) {
           toast.error("Too many attempts. Please wait and try again.");
+        } else if (isTransientAuthError(error)) {
+          toast.error(authErrorMessage(error));
         } else {
           toast.error(error.message || "Login failed. Please try again.");
         }
         return;
       }
+
       toast.success("Successfully logged in!");
       navigate("/dashboard");
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
-      } else if (error?.message?.includes("fetch") || error?.name === "TypeError") {
-        toast.error("Network error. Please check your connection and try again.");
       } else {
-        toast.error("An unexpected error occurred. Please try again.");
+        toast.error(authErrorMessage(error, "An unexpected error occurred. Please try again."));
       }
     } finally {
       setLoading(false);
+      setRetryNotice("");
     }
   };
 
@@ -104,7 +104,7 @@ const Login = () => {
               <Label htmlFor="email">Email Address</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="email" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" required />
+                <Input id="email" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" autoComplete="email" required />
               </div>
             </div>
             <div className="space-y-2">
@@ -116,12 +116,18 @@ const Login = () => {
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" required />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" autoComplete="current-password" required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? "Hide password" : "Show password"}>
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
+            {retryNotice && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>{retryNotice}</span>
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
             </Button>

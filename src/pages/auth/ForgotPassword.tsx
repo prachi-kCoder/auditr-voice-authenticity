@@ -3,14 +3,16 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Mail, ArrowLeft } from "lucide-react";
+import { Shield, Mail, ArrowLeft, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { authErrorMessage, isTransientAuthError, runAuthRequest } from "@/lib/auth-resilience";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [retryNotice, setRetryNotice] = useState("");
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,13 +21,21 @@ const ForgotPassword = () => {
       return;
     }
     setLoading(true);
+    setRetryNotice("");
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      const { error } = await runAuthRequest(
+        () => supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}/reset-password`,
+        }),
+        {
+          onRetry: () => setRetryNotice("Connection is slow. Retrying securely..."),
+        }
+      );
       if (error) {
         if (error.status === 429) {
           toast.error("Please wait a moment before requesting another reset email.");
+        } else if (isTransientAuthError(error)) {
+          toast.error(authErrorMessage(error));
         } else {
           toast.error(error.message);
         }
@@ -33,10 +43,11 @@ const ForgotPassword = () => {
         setSent(true);
         toast.success("Password reset link sent! Check your inbox.");
       }
-    } catch {
-      toast.error("Network error. Please try again.");
+    } catch (error) {
+      toast.error(authErrorMessage(error, "Network error. Please try again."));
     } finally {
       setLoading(false);
+      setRetryNotice("");
     }
   };
 
@@ -83,9 +94,15 @@ const ForgotPassword = () => {
                   <Label htmlFor="email">Email Address</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="email" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" required />
+                    <Input id="email" type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" autoComplete="email" required />
                   </div>
                 </div>
+                {retryNotice && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{retryNotice}</span>
+                  </div>
+                )}
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Sending..." : "Send Reset Link"}
                 </Button>
