@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Shield, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { authErrorMessage, isTransientAuthError, runAuthRequest } from "@/lib/auth-resilience";
 
 type RecoveryParams = {
   type: string | null;
@@ -118,10 +119,10 @@ const ResetPassword = () => {
 
       try {
         if (accessToken && refreshToken) {
-          const { error } = await supabase.auth.setSession({
+          const { error } = await runAuthRequest(() => supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
-          });
+          }));
 
           if (error) throw error;
           resolveReady();
@@ -129,24 +130,24 @@ const ResetPassword = () => {
         }
 
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          const { error } = await runAuthRequest(() => supabase.auth.exchangeCodeForSession(code));
           if (error) throw error;
           resolveReady();
           return;
         }
 
         if (type === "recovery" && tokenHash) {
-          const { error } = await supabase.auth.verifyOtp({
+          const { error } = await runAuthRequest(() => supabase.auth.verifyOtp({
             token_hash: tokenHash,
             type: "recovery",
-          });
+          }));
 
           if (error) throw error;
           resolveReady();
           return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await runAuthRequest(() => supabase.auth.getSession());
         if (session) {
           resolveReady();
           return;
@@ -155,22 +156,31 @@ const ResetPassword = () => {
         fallbackTimer = window.setTimeout(async () => {
           if (!mounted || resolvedRef.current) return;
 
-          const { data: { session: delayedSession } } = await supabase.auth.getSession();
-          if (!mounted || resolvedRef.current) return;
+          try {
+            const { data: { session: delayedSession } } = await runAuthRequest(() => supabase.auth.getSession(), { retries: 2 });
+            if (!mounted || resolvedRef.current) return;
 
-          if (delayedSession) {
-            resolveReady();
-            return;
+            if (delayedSession) {
+              resolveReady();
+              return;
+            }
+
+            resolveError(
+              hasRecoverySignal
+                ? "This reset link is invalid or expired. Please request a new one."
+                : "No valid reset link detected. Please request a new password reset."
+            );
+          } catch (error) {
+            if (!mounted || resolvedRef.current) return;
+            resolveError(authErrorMessage(error));
           }
-
-          resolveError(
-            hasRecoverySignal
-              ? "This reset link is invalid or expired. Please request a new one."
-              : "No valid reset link detected. Please request a new password reset."
-          );
         }, 1500);
-      } catch {
-        resolveError("This reset link is invalid or expired. Please request a new one.");
+      } catch (error) {
+        resolveError(
+          isTransientAuthError(error)
+            ? authErrorMessage(error)
+            : "This reset link is invalid or expired. Please request a new one."
+        );
       }
     };
 
@@ -203,20 +213,20 @@ const ResetPassword = () => {
 
     try {
       if (params.accessToken && params.refreshToken) {
-        const { error } = await supabase.auth.setSession({
+        const { error } = await runAuthRequest(() => supabase.auth.setSession({
           access_token: params.accessToken,
           refresh_token: params.refreshToken,
-        });
+        }));
 
         if (error) throw error;
       } else if (params.code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+        const { error } = await runAuthRequest(() => supabase.auth.exchangeCodeForSession(params.code));
         if (error) throw error;
       } else if (params.tokenHash) {
-        const { error } = await supabase.auth.verifyOtp({
+        const { error } = await runAuthRequest(() => supabase.auth.verifyOtp({
           token_hash: params.tokenHash,
           type: "recovery",
-        });
+        }));
 
         if (error) throw error;
       }
@@ -225,9 +235,11 @@ const ResetPassword = () => {
       setError("");
       setReady(true);
     } catch (error: any) {
-      const message = error?.message?.includes("expired") || error?.message?.includes("invalid")
-        ? "That reset link is no longer valid. Please request a new one and paste the newest link."
-        : "We couldn't validate that reset link. Please request a new one and paste the newest link.";
+      const message = isTransientAuthError(error)
+        ? authErrorMessage(error)
+        : error?.message?.includes("expired") || error?.message?.includes("invalid")
+          ? "That reset link is no longer valid. Please request a new one and paste the newest link."
+          : "We couldn't validate that reset link. Please request a new one and paste the newest link.";
 
       setReady(false);
       setError(message);
@@ -254,7 +266,7 @@ const ResetPassword = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await runAuthRequest(() => supabase.auth.updateUser({ password }));
 
       if (error) {
         toast.error(error.message);
@@ -263,8 +275,8 @@ const ResetPassword = () => {
 
       toast.success("Password updated successfully!");
       navigate("/dashboard");
-    } catch {
-      toast.error("An error occurred. Please try again.");
+    } catch (error) {
+      toast.error(authErrorMessage(error, "An error occurred. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -286,7 +298,7 @@ const ResetPassword = () => {
       <div className="min-h-screen flex items-center justify-center p-8">
         <div className="text-center space-y-4 max-w-md w-full">
           <Shield className="w-16 h-16 mx-auto text-destructive" />
-          <h2 className="text-2xl font-bold">Reset Link Invalid</h2>
+          <h2 className="text-2xl font-bold">Reset Link Needs Attention</h2>
           <p className="text-muted-foreground">{error}</p>
           <form onSubmit={handleManualLink} className="space-y-3 text-left">
             <div className="space-y-2">
@@ -362,7 +374,7 @@ const ResetPassword = () => {
                   autoComplete="new-password"
                   required
                 />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? "Hide password" : "Show password"}>
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
@@ -381,7 +393,7 @@ const ResetPassword = () => {
                   autoComplete="new-password"
                   required
                 />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}>
                   {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
