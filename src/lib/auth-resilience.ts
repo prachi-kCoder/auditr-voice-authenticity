@@ -13,7 +13,7 @@ type AuthRetryOptions = {
   onRetry?: (attempt: number) => void;
 };
 
-const transientStatuses = new Set([408, 425, 500, 502, 503, 504]);
+const transientStatuses = new Set([0, 408, 425, 500, 502, 503, 504, 520, 521, 522, 523, 524]);
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -23,15 +23,36 @@ export const isTransientAuthError = (error: unknown) => {
 
   return (
     maybeError?.name === "TypeError" ||
+    maybeError?.name === "AuthRetryableFetchError" ||
     transientStatuses.has(Number(maybeError?.status)) ||
     message.includes("failed to fetch") ||
     message.includes("networkerror") ||
     message.includes("network request failed") ||
     message.includes("load failed") ||
     message.includes("timeout") ||
+    message.includes("timed out") ||
     message.includes("connection") ||
+    message.includes("database error") ||
     message.includes("temporarily unavailable")
   );
+};
+
+/**
+ * Fire-and-forget ping that wakes the auth service while the user is still
+ * typing, so the real sign-in/sign-up request hits a warm backend.
+ */
+let warmupPromise: Promise<void> | null = null;
+export const warmAuthBackend = () => {
+  if (warmupPromise) return warmupPromise;
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) return Promise.resolve();
+  warmupPromise = fetch(`${url}/auth/v1/health`, { headers: { apikey: key } })
+    .then(() => undefined)
+    .catch(() => {
+      warmupPromise = null; // allow another attempt later
+    });
+  return warmupPromise;
 };
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
