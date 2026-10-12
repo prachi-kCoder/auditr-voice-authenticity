@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Shield, Lock, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
-import { authErrorMessage, isTransientAuthError, runAuthRequest } from "@/lib/auth-resilience";
+import { authErrorMessage, isTransientAuthError, runAuthRequest, warmAuthBackend } from "@/lib/auth-resilience";
 
 const loginSchema = z.object({
   email: z.string().trim().email({ message: "Invalid email address" }),
@@ -22,6 +22,7 @@ const signInWithRetry = (email: string, password: string, onRetry: () => void) =
 
 const Login = () => {
   const navigate = useNavigate();
+  useEffect(() => { void warmAuthBackend(); }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

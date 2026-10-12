@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Shield, Mail, ArrowLeft, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { authErrorMessage, isTransientAuthError, runAuthRequest } from "@/lib/auth-resilience";
+import { authErrorMessage, isTransientAuthError, runAuthRequest, warmAuthBackend } from "@/lib/auth-resilience";
 
 const ForgotPassword = () => {
+  useEffect(() => { void warmAuthBackend(); }, []);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);

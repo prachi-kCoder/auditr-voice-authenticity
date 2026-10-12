@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Shield, Lock, Mail, User, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
-import { authErrorMessage, isTransientAuthError, runAuthRequest } from "@/lib/auth-resilience";
+import { authErrorMessage, isTransientAuthError, runAuthRequest, warmAuthBackend } from "@/lib/auth-resilience";
 
 const signupSchema = z.object({
   fullName: z.string().trim().min(2, { message: "Name must be at least 2 characters" }),
@@ -36,6 +36,7 @@ const signupWithRetry = (email: string, password: string, fullName: string, onRe
 
 const Signup = () => {
   const navigate = useNavigate();
+  useEffect(() => { void warmAuthBackend(); }, []);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
