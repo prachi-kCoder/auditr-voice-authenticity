@@ -72,7 +72,7 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<
 
 export const runAuthRequest = async <T extends RetryableResult>(
   request: () => Promise<T>,
-  { retries = 4, timeoutMs = 15000, initialDelayMs = 700, onRetry }: AuthRetryOptions = {}
+  { retries = 5, timeoutMs = 12000, initialDelayMs = 800, onRetry }: AuthRetryOptions = {}
 ): Promise<T> => {
   let lastError: unknown;
 
