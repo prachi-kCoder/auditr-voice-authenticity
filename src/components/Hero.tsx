@@ -42,18 +42,10 @@ const Hero = () => {
           <Button 
             size="lg" 
             className="text-lg px-8 py-6 h-auto"
-            onClick={() => navigate("/auth/signup")}
+            onClick={() => navigate("/dashboard")}
           >
             Start Free Analysis
             <ArrowRight className="ml-2 h-5 w-5" />
-          </Button>
-          <Button 
-            variant="outline" 
-            size="lg"
-            className="text-lg px-8 py-6 h-auto border-primary/50 hover:border-primary"
-            onClick={() => navigate("/auth/login")}
-          >
-            Sign In
           </Button>
         </div>
 

@@ -47,17 +47,9 @@ const Index = () => {
               size="lg" 
               variant="secondary"
               className="text-lg"
-              onClick={() => navigate("/auth/signup")}
+              onClick={() => navigate("/dashboard")}
             >
-              Get Started Free
-            </Button>
-            <Button 
-              size="lg" 
-              variant="outline"
-              className="text-lg bg-transparent border-2 border-primary-foreground text-primary-foreground hover:bg-primary-foreground/10"
-              onClick={() => navigate("/auth/login")}
-            >
-              Sign In
+              Start Free Analysis
             </Button>
           </div>
         </div>

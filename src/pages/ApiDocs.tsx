@@ -168,8 +168,8 @@ const ApiDocs = () => {
           {/* CTA */}
           <div className="text-center bg-card border border-border rounded-xl p-12">
             <h2 className="text-2xl font-bold mb-3 text-foreground">Ready to integrate?</h2>
-            <p className="text-muted-foreground mb-6">Sign up to get your API key and start building in minutes.</p>
-            <Button size="lg" onClick={() => navigate("/auth/signup")}>
+            <p className="text-muted-foreground mb-6">Get your API key and start building in minutes.</p>
+            <Button size="lg" onClick={() => navigate("/dashboard")}>
               Get API Key
             </Button>
           </div>
