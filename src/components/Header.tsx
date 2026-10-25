@@ -1,32 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Shield, Menu, X } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { User } from "@supabase/supabase-js";
+import { useState } from "react";
 
 const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [user, setUser] = useState<User | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
-  };
 
   const scrollToSection = (sectionId: string) => {
     setMobileOpen(false);
@@ -73,25 +53,9 @@ const Header = () => {
           </nav>
 
           <div className="flex items-center gap-4">
-            {user ? (
-              <>
-                <Button variant="ghost" onClick={() => navigate("/dashboard")}>
-                  Dashboard
-                </Button>
-                <Button variant="outline" onClick={handleSignOut}>
-                  Sign Out
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" onClick={() => navigate("/auth/login")} className="hidden sm:inline-flex">
-                  Sign In
-                </Button>
-                <Button variant="default" onClick={() => navigate("/auth/signup")}>
-                  Get Started
-                </Button>
-              </>
-            )}
+            <Button variant="default" onClick={() => navigate("/dashboard")}>
+              Start Analysis
+            </Button>
 
             {/* Mobile hamburger */}
             <button
@@ -122,11 +86,13 @@ const Header = () => {
             >
               API
             </Link>
-            {!user && (
-              <Button variant="ghost" className="w-full justify-start" onClick={() => { navigate("/auth/login"); setMobileOpen(false); }}>
-                Sign In
-              </Button>
-            )}
+            <Button
+              variant="default"
+              className="w-full justify-center"
+              onClick={() => { navigate("/dashboard"); setMobileOpen(false); }}
+            >
+              Start Analysis
+            </Button>
           </nav>
         )}
       </div>

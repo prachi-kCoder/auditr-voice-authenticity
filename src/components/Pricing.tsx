@@ -114,7 +114,7 @@ const Pricing = () => {
                 <Button
                   variant={plan.variant}
                   className="w-full"
-                  onClick={() => navigate("/auth/signup")}
+                  onClick={() => navigate("/dashboard")}
                 >
                   {plan.cta}
                 </Button>
