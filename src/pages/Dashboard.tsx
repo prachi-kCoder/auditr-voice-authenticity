@@ -1,4 +1,3 @@
-import { useAuth } from "@/contexts/AuthContext";
 import Header from "@/components/Header";
 import AudioAnalyzer from "@/components/AudioAnalyzer";
 import BatchAnalyzer from "@/components/BatchAnalyzer";
